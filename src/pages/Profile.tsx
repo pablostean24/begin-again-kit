@@ -32,7 +32,7 @@ interface Order {
     quantity: number;
     menu_items: {
       name: string;
-    };
+    } | null;
   }[];
   manual_payment_verifications: {
     status: string;
@@ -496,7 +496,7 @@ const Profile = () => {
                               <ul className="list-disc list-inside ml-2">
                                 {order.order_items.map((item, index) => (
                                   <li key={index}>
-                                    {item.quantity}x {item.menu_items.name}
+                                    {item.quantity}x {item.menu_items?.name || 'Producto no disponible'}
                                   </li>
                                 ))}
                               </ul>
