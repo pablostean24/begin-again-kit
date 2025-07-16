@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,8 +28,8 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const [address, setAddress] = useState(initialLocation?.address || '');
   const [notes, setNotes] = useState(initialLocation?.notes || '');
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const markerRef = useRef<any>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const markerRef = useRef<google.maps.Marker | null>(null);
 
   // Initialize Google Maps
   useEffect(() => {
@@ -71,7 +70,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         const lat = event.latLng.lat();
         const lng = event.latLng.lng();
         
-        markerRef.current.setPosition({ lat, lng });
+        markerRef.current!.setPosition({ lat, lng });
         reverseGeocode(lat, lng);
       });
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +13,6 @@ import {
   Truck,
   Loader2
 } from 'lucide-react';
-import { useDriverLocation } from '@/hooks/useDriverLocation';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -34,7 +32,7 @@ interface OrderWithDriver {
     latitude: number;
     longitude: number;
     street_address: string;
-  };
+  } | null;
   order_assignments: Array<{
     driver_id: string;
     picked_up_at?: string;
@@ -54,10 +52,10 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number} | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const driverMarkerRef = useRef<any>(null);
-  const customerMarkerRef = useRef<any>(null);
-  const routeRendererRef = useRef<any>(null);
+  const mapInstanceRef = useRef<google.maps.Map | null>(null);
+  const driverMarkerRef = useRef<google.maps.Marker | null>(null);
+  const customerMarkerRef = useRef<google.maps.Marker | null>(null);
+  const routeRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
 
   // Get order details with driver info
   const { data: order, isLoading } = useQuery({
@@ -67,7 +65,11 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
         .from('orders')
         .select(`
           *,
-          delivery_addresses (*),
+          delivery_addresses (
+            street_address,
+            latitude,
+            longitude
+          ),
           order_assignments (
             *,
             delivery_drivers (
@@ -109,7 +111,7 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
             longitude: newLocation.longitude
           });
           
-          if (mapInstanceRef.current && driverMarkerRef.current) {
+          if (mapInstanceRef.current && driverMarkerRef.current && window.google) {
             const position = new window.google.maps.LatLng(
               newLocation.latitude, 
               newLocation.longitude
@@ -247,9 +249,9 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
       origin: new window.google.maps.LatLng(driverLocation.latitude, driverLocation.longitude),
       destination: new window.google.maps.LatLng(customerLocation.latitude, customerLocation.longitude),
       travelMode: window.google.maps.TravelMode.DRIVING
-    }, (result: any, status: any) => {
+    }, (result: google.maps.DirectionsResult, status: google.maps.DirectionsStatus) => {
       if (status === 'OK') {
-        routeRendererRef.current.setDirections(result);
+        routeRendererRef.current!.setDirections(result);
       }
     });
   };
@@ -259,7 +261,7 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
     if (driverLocation && mapLoaded) {
       if (!driverMarkerRef.current) {
         addDriverMarker();
-      } else {
+      } else if (window.google) {
         const position = new window.google.maps.LatLng(
           driverLocation.latitude,
           driverLocation.longitude
