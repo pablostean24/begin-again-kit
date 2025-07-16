@@ -38,7 +38,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 
       const defaultLocation = currentLocation || { latitude: -12.0464, longitude: -77.0428 }; // Lima, Peru
 
-      mapInstanceRef.current = new google.maps.Map(mapRef.current, {
+      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
         center: { lat: defaultLocation.latitude, lng: defaultLocation.longitude },
         zoom: 15,
         styles: [
@@ -51,7 +51,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
       });
 
       // Add marker
-      markerRef.current = new google.maps.Marker({
+      markerRef.current = new window.google.maps.Marker({
         position: { lat: defaultLocation.latitude, lng: defaultLocation.longitude },
         map: mapInstanceRef.current,
         draggable: true,
@@ -91,7 +91,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const reverseGeocode = async (lat: number, lng: number) => {
     if (!window.google) return;
 
-    const geocoder = new google.maps.Geocoder();
+    const geocoder = new window.google.maps.Geocoder();
     
     try {
       const response = await geocoder.geocode({
@@ -154,7 +154,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const searchAddress = async () => {
     if (!address.trim() || !window.google) return;
 
-    const geocoder = new google.maps.Geocoder();
+    const geocoder = new window.google.maps.Geocoder();
     
     try {
       const response = await geocoder.geocode({ address });
