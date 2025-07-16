@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,17 +29,18 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   const [address, setAddress] = useState(initialLocation?.address || '');
   const [notes, setNotes] = useState(initialLocation?.notes || '');
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
 
   // Initialize Google Maps
   useEffect(() => {
     const initMap = () => {
-      if (!mapRef.current || !window.google) return;
+      if (!mapRef.current || !(window as any).google) return;
 
+      const googleMaps = (window as any).google.maps;
       const defaultLocation = currentLocation || { latitude: -12.0464, longitude: -77.0428 }; // Lima, Peru
 
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+      mapInstanceRef.current = new googleMaps.Map(mapRef.current, {
         center: { lat: defaultLocation.latitude, lng: defaultLocation.longitude },
         zoom: 15,
         styles: [
@@ -51,7 +53,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
       });
 
       // Add marker
-      markerRef.current = new window.google.maps.Marker({
+      markerRef.current = new googleMaps.Marker({
         position: { lat: defaultLocation.latitude, lng: defaultLocation.longitude },
         map: mapInstanceRef.current,
         draggable: true,
@@ -78,7 +80,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     };
 
     // Load Google Maps script if not already loaded
-    if (!window.google) {
+    if (!(window as any).google) {
       const script = document.createElement('script');
       script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places`;
       script.onload = initMap;
@@ -89,9 +91,9 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   }, []);
 
   const reverseGeocode = async (lat: number, lng: number) => {
-    if (!window.google) return;
+    if (!(window as any).google) return;
 
-    const geocoder = new window.google.maps.Geocoder();
+    const geocoder = new (window as any).google.maps.Geocoder();
     
     try {
       const response = await geocoder.geocode({
@@ -152,9 +154,9 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   };
 
   const searchAddress = async () => {
-    if (!address.trim() || !window.google) return;
+    if (!address.trim() || !(window as any).google) return;
 
-    const geocoder = new window.google.maps.Geocoder();
+    const geocoder = new (window as any).google.maps.Geocoder();
     
     try {
       const response = await geocoder.geocode({ address });

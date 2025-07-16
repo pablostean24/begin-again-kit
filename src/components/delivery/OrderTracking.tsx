@@ -52,10 +52,10 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
   const [mapLoaded, setMapLoaded] = useState(false);
   const [driverLocation, setDriverLocation] = useState<{latitude: number, longitude: number} | null>(null);
   const mapRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<google.maps.Map | null>(null);
-  const driverMarkerRef = useRef<google.maps.Marker | null>(null);
-  const customerMarkerRef = useRef<google.maps.Marker | null>(null);
-  const routeRendererRef = useRef<google.maps.DirectionsRenderer | null>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const driverMarkerRef = useRef<any>(null);
+  const customerMarkerRef = useRef<any>(null);
+  const routeRendererRef = useRef<any>(null);
 
   // Get order details with driver info
   const { data: order, isLoading } = useQuery({
@@ -111,8 +111,8 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
             longitude: newLocation.longitude
           });
           
-          if (mapInstanceRef.current && driverMarkerRef.current && window.google) {
-            const position = new window.google.maps.LatLng(
+          if (mapInstanceRef.current && driverMarkerRef.current && (window as any).google) {
+            const position = new (window as any).google.maps.LatLng(
               newLocation.latitude, 
               newLocation.longitude
             );
@@ -151,14 +151,15 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
   // Initialize Google Maps
   useEffect(() => {
     const initMap = () => {
-      if (!mapRef.current || !window.google) return;
+      if (!mapRef.current || !(window as any).google) return;
 
+      const googleMaps = (window as any).google.maps;
       const center = {
         lat: customerLocation.latitude,
         lng: customerLocation.longitude
       };
 
-      mapInstanceRef.current = new window.google.maps.Map(mapRef.current, {
+      mapInstanceRef.current = new googleMaps.Map(mapRef.current, {
         center,
         zoom: 14,
         styles: [
@@ -171,7 +172,7 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
       });
 
       // Add customer marker
-      customerMarkerRef.current = new window.google.maps.Marker({
+      customerMarkerRef.current = new googleMaps.Marker({
         position: center,
         map: mapInstanceRef.current,
         title: 'Tu ubicación',
@@ -181,7 +182,7 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
               <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
             </svg>
           `),
-          scaledSize: new window.google.maps.Size(30, 30)
+          scaledSize: new googleMaps.Size(30, 30)
         }
       });
 
@@ -194,7 +195,7 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
     };
 
     // Load Google Maps script if not already loaded
-    if (!window.google) {
+    if (!(window as any).google) {
       const script = document.createElement('script');
       script.src = `https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=directions`;
       script.onload = initMap;
@@ -205,14 +206,15 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
   }, [customerLocation]);
 
   const addDriverMarker = () => {
-    if (!driverLocation || !mapInstanceRef.current || !window.google) return;
+    if (!driverLocation || !mapInstanceRef.current || !(window as any).google) return;
 
+    const googleMaps = (window as any).google.maps;
     const position = {
       lat: driverLocation.latitude,
       lng: driverLocation.longitude
     };
 
-    driverMarkerRef.current = new window.google.maps.Marker({
+    driverMarkerRef.current = new googleMaps.Marker({
       position,
       map: mapInstanceRef.current,
       title: 'Repartidor',
@@ -222,7 +224,7 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
             <path d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.22.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/>
           </svg>
         `),
-        scaledSize: new window.google.maps.Size(30, 30)
+        scaledSize: new googleMaps.Size(30, 30)
       }
     });
 
@@ -230,12 +232,13 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
   };
 
   const updateRoute = () => {
-    if (!driverLocation || !customerLocation || !window.google) return;
+    if (!driverLocation || !customerLocation || !(window as any).google) return;
 
-    const directionsService = new window.google.maps.DirectionsService();
+    const googleMaps = (window as any).google.maps;
+    const directionsService = new googleMaps.DirectionsService();
     
     if (!routeRendererRef.current) {
-      routeRendererRef.current = new window.google.maps.DirectionsRenderer({
+      routeRendererRef.current = new googleMaps.DirectionsRenderer({
         suppressMarkers: true,
         polylineOptions: {
           strokeColor: '#4F46E5',
@@ -246,10 +249,10 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
     }
 
     directionsService.route({
-      origin: new window.google.maps.LatLng(driverLocation.latitude, driverLocation.longitude),
-      destination: new window.google.maps.LatLng(customerLocation.latitude, customerLocation.longitude),
-      travelMode: window.google.maps.TravelMode.DRIVING
-    }, (result: google.maps.DirectionsResult, status: google.maps.DirectionsStatus) => {
+      origin: new googleMaps.LatLng(driverLocation.latitude, driverLocation.longitude),
+      destination: new googleMaps.LatLng(customerLocation.latitude, customerLocation.longitude),
+      travelMode: googleMaps.TravelMode.DRIVING
+    }, (result: any, status: any) => {
       if (status === 'OK') {
         routeRendererRef.current!.setDirections(result);
       }
@@ -261,8 +264,8 @@ const OrderTracking: React.FC<OrderTrackingProps> = ({
     if (driverLocation && mapLoaded) {
       if (!driverMarkerRef.current) {
         addDriverMarker();
-      } else if (window.google) {
-        const position = new window.google.maps.LatLng(
+      } else if ((window as any).google) {
+        const position = new (window as any).google.maps.LatLng(
           driverLocation.latitude,
           driverLocation.longitude
         );

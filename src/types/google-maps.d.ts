@@ -121,7 +121,4 @@ declare namespace google {
   }
 }
 
-// Declare google as a global variable
-declare var google: typeof google;
-
 export {};
