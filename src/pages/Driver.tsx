@@ -1,11 +1,14 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { 
   Home, 
   Package, 
@@ -14,18 +17,23 @@ import {
   User,
   LogOut,
   AlertCircle,
-  Menu
+  Menu,
+  Phone,
+  Car
 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import DriverDashboard from '@/components/driver/DriverDashboard';
 import DriverOrdersList from '@/components/driver/DriverOrdersList';
 import DriverNotifications from '@/components/driver/DriverNotifications';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 
 const Driver = () => {
-  const { user, signOut } = useAuth();
+  const { user, userRole, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showDriverSetup, setShowDriverSetup] = useState(false);
+  const queryClient = useQueryClient();
 
   const { data: driverInfo, isLoading, error } = useQuery({
     queryKey: ['driver-info', user?.email],
@@ -38,7 +46,7 @@ const Driver = () => {
         .eq('email', user.email)
         .single();
       
-      if (error) {
+      if (error && error.code !== 'PGRST116') {
         console.error('Error fetching driver info:', error);
         throw error;
       }
@@ -46,6 +54,43 @@ const Driver = () => {
     },
     enabled: !!user?.email,
     retry: 1
+  });
+
+  const createDriverProfile = useMutation({
+    mutationFn: async (driverData: {
+      full_name: string;
+      phone: string;
+      vehicle_type: string;
+      license_plate?: string;
+    }) => {
+      if (!user?.email) throw new Error('No user email');
+      
+      const { data, error } = await supabase
+        .from('delivery_drivers')
+        .insert([{
+          email: user.email,
+          full_name: driverData.full_name,
+          phone: driverData.phone,
+          vehicle_type: driverData.vehicle_type,
+          license_plate: driverData.license_plate || null,
+          max_concurrent_orders: 3,
+          is_active: true,
+          is_available: true
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['driver-info'] });
+      setShowDriverSetup(false);
+      toast.success('Perfil de repartidor creado exitosamente');
+    },
+    onError: (error) => {
+      toast.error('Error al crear perfil: ' + error.message);
+    }
   });
 
   const handleSignOut = async () => {
@@ -77,6 +122,9 @@ const Driver = () => {
     </div>
   );
 
+  // Check if user has access (either authenticated with delivery role or existing driver)
+  const hasDriverAccess = user && (userRole === 'delivery' || driverInfo);
+
   if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -95,18 +143,8 @@ const Driver = () => {
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p>Cargando información del repartidor...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !driverInfo) {
+  // Check if user has delivery role but no driver record
+  if (userRole !== 'delivery' && !driverInfo) {
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
@@ -155,15 +193,14 @@ const Driver = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="w-5 h-5 text-orange-500" />
-                Repartidor No Encontrado
+                Acceso No Autorizado
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>
-                  No se encontró información de repartidor para este usuario ({user.email}).
-                  Contacta al administrador para que te registre como repartidor.
+                  No tienes permisos de repartidor. Contacta al administrador para obtener acceso.
                 </AlertDescription>
               </Alert>
               
@@ -186,6 +223,187 @@ const Driver = () => {
     );
   }
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p>Cargando información del repartidor...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If user has delivery role but no driver profile, show setup form
+  if (userRole === 'delivery' && !driverInfo && !error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                <h1 className="text-xl font-bold text-gray-900">
+                  Configuración de Repartidor
+                </h1>
+              </div>
+              
+              <div className="flex items-center space-x-4">
+                <Link to="/">
+                  <Button variant="outline">
+                    <Home className="w-4 h-4 mr-2" />
+                    Ir al Inicio
+                  </Button>
+                </Link>
+                <Button variant="outline" onClick={handleSignOut}>
+                  <LogOut className="w-4 w-4 mr-2" />
+                  Cerrar Sesión
+                </Button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+          <Card className="max-w-md w-full mx-4">
+            <CardHeader>
+              <CardTitle className="text-center">Completar Perfil de Repartidor</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 mb-6 text-center">
+                Necesitas completar tu perfil de repartidor para acceder al panel.
+              </p>
+              
+              <form onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.currentTarget);
+                createDriverProfile.mutate({
+                  full_name: formData.get('full_name') as string,
+                  phone: formData.get('phone') as string,
+                  vehicle_type: formData.get('vehicle_type') as string,
+                  license_plate: formData.get('license_plate') as string || undefined,
+                });
+              }} className="space-y-4">
+                <div>
+                  <Label htmlFor="full_name">Nombre Completo</Label>
+                  <Input id="full_name" name="full_name" required />
+                </div>
+                
+                <div>
+                  <Label htmlFor="phone">Teléfono</Label>
+                  <Input id="phone" name="phone" required />
+                </div>
+                
+                <div>
+                  <Label htmlFor="vehicle_type">Tipo de Vehículo</Label>
+                  <select 
+                    id="vehicle_type" 
+                    name="vehicle_type" 
+                    className="w-full p-2 border rounded"
+                    required
+                  >
+                    <option value="">Seleccionar</option>
+                    <option value="bike">Bicicleta</option>
+                    <option value="motorcycle">Motocicleta</option>
+                    <option value="car">Coche</option>
+                    <option value="walking">A pie</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <Label htmlFor="license_plate">Placa (Opcional)</Label>
+                  <Input id="license_plate" name="license_plate" />
+                </div>
+                
+                <Button type="submit" className="w-full" disabled={createDriverProfile.isPending}>
+                  {createDriverProfile.isPending ? 'Creando Perfil...' : 'Crear Perfil'}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if there's an actual error (not just missing record)
+  if (error && error.message !== 'No records found') {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center">
+                <h1 className="text-xl font-bold text-gray-900">
+                  Panel de Repartidor
+                </h1>
+              </div>
+              
+              <div className="hidden md:flex items-center space-x-4">
+                <Link to="/">
+                  <Button variant="outline">
+                    <Home className="w-4 h-4 mr-2" />
+                    Ir al Inicio
+                  </Button>
+                </Link>
+                <Button variant="outline" onClick={handleSignOut}>
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Cerrar Sesión
+                </Button>
+              </div>
+
+              <div className="md:hidden">
+                <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Menu className="h-4 w-4" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="right" className="w-64">
+                    <MobileMenu />
+                  </SheetContent>
+                </Sheet>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+          <Card className="max-w-md w-full mx-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-red-500" />
+                Error de Conexión
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Hubo un error al cargar la información del repartidor. Por favor, intenta nuevamente.
+                </AlertDescription>
+              </Alert>
+              
+              <div className="flex flex-col gap-2">
+                <Button onClick={() => window.location.reload()} className="w-full">
+                  Recargar Página
+                </Button>
+                <Link to="/">
+                  <Button variant="outline" className="w-full">
+                    <Home className="w-4 h-4 mr-2" />
+                    Ir al Inicio
+                  </Button>
+                </Link>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Main driver panel - at this point we have a valid driver record
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -201,7 +419,7 @@ const Driver = () => {
             {/* Desktop Navigation */}
             <div className="hidden md:flex items-center space-x-4">
               <span className="text-sm text-gray-600">
-                {driverInfo.full_name}
+                {driverInfo?.full_name || user.email}
               </span>
               <Link to="/">
                 <Button variant="outline">
@@ -283,17 +501,21 @@ const Driver = () => {
 
           <TabsContent value="dashboard">
             <DriverDashboard 
-              driverId={driverInfo.id} 
-              driverInfo={driverInfo}
+              driverId={driverInfo?.id || ''} 
+              driverInfo={driverInfo || {
+                full_name: user.email,
+                rating: 0,
+                is_available: true
+              }}
             />
           </TabsContent>
 
           <TabsContent value="orders">
-            <DriverOrdersList driverId={driverInfo.id} />
+            <DriverOrdersList driverId={driverInfo?.id || ''} />
           </TabsContent>
 
           <TabsContent value="notifications">
-            <DriverNotifications driverId={driverInfo.id} />
+            <DriverNotifications driverId={driverInfo?.id || ''} />
           </TabsContent>
 
           <TabsContent value="stats">
