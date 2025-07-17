@@ -72,6 +72,8 @@ export const useDriverOrders = (driverId?: string) => {
     queryKey: ['available-orders'],
     queryFn: async () => {
       console.log('Fetching available orders with status ready');
+      console.log('Supabase URL:', supabase.supabaseUrl);
+      console.log('Supabase Key:', supabase.supabaseKey?.substring(0, 20) + '...');
       
       // First, get all order IDs that are already assigned to drivers
       const { data: assignedOrderIds, error: assignedError } = await supabase
