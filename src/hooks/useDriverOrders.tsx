@@ -10,12 +10,13 @@ type OrderStatus = 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered'
 export const useDriverOrders = (driverId?: string) => {
   const queryClient = useQueryClient();
 
-  const { data: assignedOrders, isLoading, error } = useQuery({
+  // Fetch assigned orders (orders specifically assigned to this driver)
+  const { data: assignedOrders, isLoading: isLoadingAssigned, error: assignedError } = useQuery({
     queryKey: ['driver-orders', driverId],
     queryFn: async () => {
       if (!driverId) return [];
       
-      console.log('Fetching orders for driver:', driverId);
+      console.log('Fetching assigned orders for driver:', driverId);
       
       const { data, error } = await supabase
         .from('orders')
@@ -54,14 +55,68 @@ export const useDriverOrders = (driverId?: string) => {
         .order('created_at', { ascending: false });
       
       if (error) {
-        console.error('Error fetching driver orders:', error);
+        console.error('Error fetching assigned orders:', error);
         throw error;
       }
       
-      console.log('Fetched driver orders:', data);
+      console.log('Fetched assigned orders:', data);
       return data as DriverOrder[];
     },
     enabled: !!driverId,
+    retry: 2,
+    retryDelay: 1000
+  });
+
+  // Fetch available orders (all orders with status "ready" that are not assigned or available for pickup)
+  const { data: availableOrders, isLoading: isLoadingAvailable, error: availableError } = useQuery({
+    queryKey: ['available-orders'],
+    queryFn: async () => {
+      console.log('Fetching available orders with status ready');
+      
+      const { data, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          profiles (
+            full_name,
+            phone
+          ),
+          delivery_addresses (
+            street_address,
+            city,
+            postal_code
+          ),
+          order_items (
+            id,
+            quantity,
+            unit_price,
+            total_price,
+            menu_items (
+              name
+            )
+          ),
+          order_assignments (
+            id,
+            assigned_at,
+            picked_up_at,
+            delivered_at,
+            estimated_pickup_time,
+            estimated_delivery_time,
+            actual_distance,
+            driver_id
+          )
+        `)
+        .eq('status', 'ready')
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error('Error fetching available orders:', error);
+        throw error;
+      }
+      
+      console.log('Fetched available orders:', data);
+      return data as DriverOrder[];
+    },
     retry: 2,
     retryDelay: 1000
   });
@@ -110,11 +165,58 @@ export const useDriverOrders = (driverId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['driver-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['available-orders'] });
       toast.success('Estado del pedido actualizado');
     },
     onError: (error) => {
       console.error('Error in updateOrderStatus:', error);
       toast.error('Error al actualizar pedido: ' + error.message);
+    }
+  });
+
+  const assignOrderToDriver = useMutation({
+    mutationFn: async ({ orderId, driverId }: { orderId: string; driverId: string }) => {
+      console.log('Assigning order to driver:', { orderId, driverId });
+      
+      // Check if assignment already exists
+      const { data: existingAssignment } = await supabase
+        .from('order_assignments')
+        .select('id')
+        .eq('order_id', orderId)
+        .single();
+
+      if (existingAssignment) {
+        // Update existing assignment
+        const { error } = await supabase
+          .from('order_assignments')
+          .update({
+            driver_id: driverId,
+            assigned_at: new Date().toISOString()
+          })
+          .eq('order_id', orderId);
+
+        if (error) throw error;
+      } else {
+        // Create new assignment
+        const { error } = await supabase
+          .from('order_assignments')
+          .insert({
+            order_id: orderId,
+            driver_id: driverId,
+            assigned_at: new Date().toISOString()
+          });
+
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['driver-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['available-orders'] });
+      toast.success('Pedido asignado correctamente');
+    },
+    onError: (error) => {
+      console.error('Error assigning order:', error);
+      toast.error('Error al asignar pedido: ' + error.message);
     }
   });
 
@@ -140,16 +242,21 @@ export const useDriverOrders = (driverId?: string) => {
 
   // Log any errors for debugging
   useEffect(() => {
-    if (error) {
-      console.error('Driver orders query error:', error);
+    if (assignedError) {
+      console.error('Assigned orders query error:', assignedError);
     }
-  }, [error]);
+    if (availableError) {
+      console.error('Available orders query error:', availableError);
+    }
+  }, [assignedError, availableError]);
 
   return {
     assignedOrders,
-    isLoading,
-    error,
+    availableOrders,
+    isLoading: isLoadingAssigned || isLoadingAvailable,
+    error: assignedError || availableError,
     updateOrderStatus,
+    assignOrderToDriver,
     pickupOrder,
     deliverOrder
   };
