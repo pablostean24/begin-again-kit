@@ -67,29 +67,13 @@ export const useDriverOrders = (driverId?: string) => {
     retryDelay: 1000
   });
 
-  // Fetch available orders (orders with status "ready" that are NOT assigned to any driver)
+  // Fetch available orders (all orders with status "ready" that are not assigned or available for pickup)
   const { data: availableOrders, isLoading: isLoadingAvailable, error: availableError } = useQuery({
     queryKey: ['available-orders'],
     queryFn: async () => {
       console.log('Fetching available orders with status ready');
-      console.log('Supabase URL:', supabase.supabaseUrl);
-      console.log('Supabase Key:', supabase.supabaseKey?.substring(0, 20) + '...');
       
-      // First, get all order IDs that are already assigned to drivers
-      const { data: assignedOrderIds, error: assignedError } = await supabase
-        .from('order_assignments')
-        .select('order_id');
-      
-      if (assignedError) {
-        console.error('Error fetching assigned order IDs:', assignedError);
-        throw assignedError;
-      }
-      
-      const excludeOrderIds = assignedOrderIds?.map(a => a.order_id) || [];
-      console.log('Excluding order IDs that are already assigned:', excludeOrderIds);
-      
-      // Now fetch orders with status "ready" that are NOT in the assigned list
-      let query = supabase
+      const { data, error } = await supabase
         .from('orders')
         .select(`
           *,
@@ -110,17 +94,20 @@ export const useDriverOrders = (driverId?: string) => {
             menu_items (
               name
             )
+          ),
+          order_assignments (
+            id,
+            assigned_at,
+            picked_up_at,
+            delivered_at,
+            estimated_pickup_time,
+            estimated_delivery_time,
+            actual_distance,
+            driver_id
           )
         `)
         .eq('status', 'ready')
         .order('created_at', { ascending: false });
-      
-      // Only exclude if there are assigned orders
-      if (excludeOrderIds.length > 0) {
-        query = query.not('id', 'in', `(${excludeOrderIds.join(',')})`);
-      }
-      
-      const { data, error } = await query;
       
       if (error) {
         console.error('Error fetching available orders:', error);
